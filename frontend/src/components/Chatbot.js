@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import './Chatbot.css';
 
 const Chatbot = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const student_id = 1; // ví dụ
 
   const chatEndRef = useRef(null);
@@ -22,31 +24,39 @@ const Chatbot = () => {
   }, [messages]);
 
   const sendMessage = async () => {
-    if (!input) return;
+    if (!input.trim()) return;
     
-    // 1. Lưu message học sinh vào DB
-    const newMsg = {
-        student_id,
-        sender: 'student',
-        content: input,
-        emotion: null,
-    };
-    await axios.post(`http://localhost:5001/api/messages`, newMsg);
-
+    setIsLoading(true);
+    const userMessage = input.trim();
     setInput('');
-    fetchMessages();
+    
+    try {
+      // 1. Lưu message học sinh vào DB
+      const newMsg = {
+          student_id,
+          sender: 'student',
+          content: userMessage,
+          emotion: null,
+      };
+      await axios.post(`http://localhost:5001/api/messages`, newMsg);
+      fetchMessages();
 
-    // 2. Gọi AI trả lời
-    const aiRes = await axios.post(`http://localhost:5001/api/ai/chat`, { message: input });
-    const botReply = {
-        student_id,
-        sender: 'bot',
-        content: aiRes.data.reply,
-        emotion: null,
-    };
+      // 2. Gọi AI trả lời
+      const aiRes = await axios.post(`http://localhost:5001/api/ai/chat`, { message: userMessage });
+      const botReply = {
+          student_id,
+          sender: 'bot',
+          content: aiRes.data.reply,
+          emotion: null,
+      };
 
-    await axios.post(`http://localhost:5001/api/messages`, botReply);
-    fetchMessages();
+      await axios.post(`http://localhost:5001/api/messages`, botReply);
+      fetchMessages();
+    } catch (error) {
+      console.error('Error sending message:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -57,21 +67,70 @@ const Chatbot = () => {
   };
     
   return (
-    <div style={{ maxWidth: 500, margin: 'auto', padding: 20 }}>
-      <div style={{ border: '1px solid #ccc', height: 400, overflowY: 'scroll', padding: 10 }}>
+    <div className="chatbot-container">
+      <div className="chatbot-header">
+        <div className="header-info">
+          <div className="bot-avatar">🤖</div>
+          <div>
+            <h3>AI Assistant</h3>
+            <span className="status">Online</span>
+          </div>
+        </div>
+      </div>
+      
+      <div className="chat-messages">
         {messages.map((msg) => (
-          <p key={msg.id}><b>{msg.sender}:</b> {msg.content}</p>
+          <div key={msg.id} className={`message ${msg.sender === 'student' ? 'user-message' : 'bot-message'}`}>
+            <div className="message-avatar">
+              {msg.sender === 'student' ? '👤' : '🤖'}
+            </div>
+            <div className="message-content">
+              <div className="message-bubble">
+                {msg.content}
+              </div>
+              <div className="message-time">
+                {new Date(msg.created_at).toLocaleTimeString('vi-VN', { 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                })}
+              </div>
+            </div>
+          </div>
         ))}
+        {isLoading && (
+          <div className="message bot-message">
+            <div className="message-avatar">🤖</div>
+            <div className="message-content">
+              <div className="message-bubble typing">
+                <div className="typing-indicator">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <div ref={chatEndRef} />
       </div>
-      <input
-        style={{ width: '80%', padding: 10 }}
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder="Nhập tin nhắn..."
-        onKeyPress={handleKeyPress}
-      />
-      <button style={{ padding: 10 }} onClick={sendMessage}>Gửi</button>
+      
+      <div className="chat-input-container">
+        <input
+          className="chat-input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Nhập tin nhắn của bạn..."
+          onKeyPress={handleKeyPress}
+          disabled={isLoading}
+        />
+        <button 
+          className={`send-button ${isLoading ? 'disabled' : ''}`}
+          onClick={sendMessage}
+          disabled={isLoading || !input.trim()}
+        >
+          {isLoading ? '⏳' : '📤'}
+        </button>
+      </div>
     </div>
   );
 };
